@@ -81,3 +81,61 @@ test('--help exits zero', () => {
   assert.equal(result.status, 0)
   assert.match(result.stdout, /Usage:/)
 })
+
+const CANARY = 'AKIAIOSFODNN7EXAMPLE'
+
+/**
+ * A leak is still a leak when the message quotes only the first few characters,
+ * so every prefix down to eight characters is checked, not just the whole
+ * canary. Eight is short enough to catch V8's ten-character truncation.
+ */
+function assertNoCanary(streams) {
+  for (const [name, text] of Object.entries(streams)) {
+    for (let length = CANARY.length; length >= 8; length -= 1) {
+      assert.ok(
+        !text.includes(CANARY.slice(0, length)),
+        `${name} echoed the first ${length} characters of the unparseable file`,
+      )
+    }
+  }
+}
+
+test('an unparseable manifest is diagnosed without echoing its contents', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'amg-leak-'))
+  try {
+    const manifestPath = join(directory, 'manifest.json')
+    await writeFile(manifestPath, CANARY)
+
+    const result = run(['verify', 'examples/dist', '--manifest', manifestPath])
+
+    assert.equal(result.status, 2)
+    assertNoCanary({ stdout: result.stdout, stderr: result.stderr })
+    assert.match(result.stderr, /not valid JSON/)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('a truncated manifest still reports where parsing stopped', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'amg-leak-'))
+  try {
+    const manifestPath = join(directory, 'manifest.json')
+    await writeFile(manifestPath, `{"secret": "${CANARY}", `)
+
+    const result = run(['verify', 'examples/dist', '--manifest', manifestPath])
+
+    assert.equal(result.status, 2)
+    assertNoCanary({ stdout: result.stdout, stderr: result.stderr })
+    assert.match(result.stderr, /at position \d+ \(line \d+ column \d+\)/)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('an unparseable --build value is diagnosed without echoing it', () => {
+  const result = run(['generate', 'examples/dist', '--build', CANARY])
+
+  assert.equal(result.status, 2)
+  assertNoCanary({ stdout: result.stdout, stderr: result.stderr })
+  assert.match(result.stderr, /--build requires valid JSON/)
+})

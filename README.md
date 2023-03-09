@@ -99,6 +99,16 @@ packaging question rather than tampering. It is still reported.
 | `1` | verification failed |
 | `2` | invalid usage, or the directory could not be read |
 
+## Diagnostics never quote the input
+
+A manifest that fails to parse is reported by position, never by content:
+`Manifest build/manifest.json is not valid JSON: Expected ',' or '}' after
+property value in JSON at position 37 (line 1 column 38)`. V8's own parse error
+quotes the document it choked on, so a manifest short enough to be only a
+credential would otherwise be reproduced in full on stderr. The quoted half is
+stripped; the position, line and column survive. The same holds for `--build`
+and `--provenance` values.
+
 ## Limits and non-goals
 
 - Defaults: 50,000 files, 8 GiB total, 64 directory levels. Exceeding a limit is

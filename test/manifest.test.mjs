@@ -9,6 +9,7 @@ import {
   ScanError,
   generateManifest,
   manifestDigest,
+  parseFailureDetail,
   verifyManifest,
 } from '../src/index.mjs'
 
@@ -265,4 +266,52 @@ test('unicode paths order consistently and round-trip through verification', asy
     assert.equal(report.status, 'pass')
     assert.deepEqual(manifest.files.map((file) => file.path), ['z.txt', 'Ä.txt', 'é.txt'])
   })
+})
+
+test('parseFailureDetail keeps the position and drops the quoted document', () => {
+  const secret = 'AKIAIOSFODNN7EXAMPLE'
+  const quoting = (() => {
+    try {
+      JSON.parse(secret)
+      return null
+    } catch (error) {
+      return error
+    }
+  })()
+
+  assert.ok(quoting.message.includes(secret), 'V8 no longer quotes the input; this guard needs revisiting')
+  assert.equal(parseFailureDetail(quoting), "unexpected token 'A' in the document")
+
+  const positional = (() => {
+    try {
+      JSON.parse('{"region": "eu", ')
+      return null
+    } catch (error) {
+      return error
+    }
+  })()
+
+  assert.match(parseFailureDetail(positional), /at position \d+ \(line \d+ column \d+\)$/)
+
+  const truncated = (() => {
+    try {
+      JSON.parse('password=hunter2-correct-horse')
+      return null
+    } catch (error) {
+      return error
+    }
+  })()
+
+  assert.equal(parseFailureDetail(truncated), "unexpected token 'p' in the document")
+
+  const empty = (() => {
+    try {
+      JSON.parse('')
+      return null
+    } catch (error) {
+      return error
+    }
+  })()
+
+  assert.equal(parseFailureDetail(empty), 'Unexpected end of JSON input')
 })

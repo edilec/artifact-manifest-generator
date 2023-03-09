@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { formatReport, generateManifest, verifyManifest } from '../src/index.mjs'
+import { formatReport, generateManifest, parseFailureDetail, verifyManifest } from '../src/index.mjs'
 
 const HELP = `artifact-manifest-generator
 
@@ -45,12 +45,20 @@ function parseArguments(argv) {
       index += 1
       return value
     }
+    const takeJson = (name) => {
+      const value = takeValue(name)
+      try {
+        return JSON.parse(value)
+      } catch (error) {
+        throw new Error(`${name} requires valid JSON: ${parseFailureDetail(error)}`)
+      }
+    }
 
     if (argument === '--json') options.json = true
     else if (argument === '--output') options.output = takeValue('--output')
     else if (argument === '--manifest') options.manifest = takeValue('--manifest')
-    else if (argument === '--build') options.build = JSON.parse(takeValue('--build'))
-    else if (argument === '--provenance') options.provenance = JSON.parse(takeValue('--provenance'))
+    else if (argument === '--build') options.build = takeJson('--build')
+    else if (argument === '--provenance') options.provenance = takeJson('--provenance')
     else if (argument.startsWith('-')) throw new Error(`Unknown option "${argument}"`)
     else if (options.directory === null) options.directory = argument
     else throw new Error('Provide exactly one directory')
@@ -59,6 +67,15 @@ function parseArguments(argv) {
   if (options.directory === null) throw new Error('Provide an artifact directory')
   if (options.command === 'verify' && options.manifest === null) throw new Error('verify requires --manifest')
   return options
+}
+
+async function readManifest(path, label) {
+  const text = await readFile(path, 'utf8')
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Manifest ${label} is not valid JSON: ${parseFailureDetail(error)}`)
+  }
 }
 
 async function main(argv) {
@@ -91,7 +108,7 @@ async function main(argv) {
       return 0
     }
 
-    const manifest = JSON.parse(await readFile(resolve(options.manifest), 'utf8'))
+    const manifest = await readManifest(resolve(options.manifest), options.manifest)
     const report = await verifyManifest(options.directory, manifest)
     process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report))
     return report.status === 'fail' ? 1 : 0

@@ -18,4 +18,12 @@ All notable changes to this project are documented in this file.
 - a CLI with `generate` and `verify`, `--json`, and exit codes 0 / 1 / 2;
 - a runnable example artifact directory and its manifest.
 
+### Fixed
+
+- an unparseable manifest, `--build` or `--provenance` value is no longer echoed
+  on stderr. V8's parse error quotes the document (`Unexpected token 'A',
+  "AKIA..." is not valid JSON`), so a file short enough to be only a credential
+  was reproduced in full by its own diagnostic. Position, line and column are
+  kept; the quoted content is dropped.
+
 No release has been published.
