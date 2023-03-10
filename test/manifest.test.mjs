@@ -280,7 +280,7 @@ test('parseFailureDetail keeps the position and drops the quoted document', () =
   })()
 
   assert.ok(quoting.message.includes(secret), 'V8 no longer quotes the input; this guard needs revisiting')
-  assert.equal(parseFailureDetail(quoting), "unexpected token 'A' in the document")
+  assert.equal(parseFailureDetail(quoting), "unexpected token 'A' at the start of the document")
 
   const positional = (() => {
     try {
@@ -302,7 +302,7 @@ test('parseFailureDetail keeps the position and drops the quoted document', () =
     }
   })()
 
-  assert.equal(parseFailureDetail(truncated), "unexpected token 'p' in the document")
+  assert.equal(parseFailureDetail(truncated), "unexpected token 'p' at the start of the document")
 
   const empty = (() => {
     try {

@@ -39,6 +39,30 @@ function byCodeUnit(left, right) {
   return left < right ? -1 : 1
 }
 
+const UNPARSEABLE = 'the document could not be parsed as JSON'
+
+/** Where V8 puts the offending offset. Safe: an offset says nothing about content. */
+const POSITION = /at position \d+(?: \(line \d+ column \d+\))?/
+
+/**
+ * The shape that quotes the input. The `s` flag matters: the quoted span can
+ * contain a newline. A leading `...` means the quoted run came from the middle
+ * of the document rather than its start.
+ */
+const QUOTES_THE_INPUT = /^Unexpected token (.+?), (\.\.\.)?".*"(?:\.\.\.)? is not valid JSON$/s
+
+function describeParseFailure(message) {
+  const quoting = QUOTES_THE_INPUT.exec(message)
+  if (quoting !== null) {
+    const where = quoting[2] === undefined ? 'at the start of the document' : 'inside the document'
+    return `unexpected token ${quoting[1]} ${where}`
+  }
+  const position = POSITION.exec(message)
+  if (position !== null) return message.slice(0, position.index + position[0].length)
+  if (message === 'Unexpected end of JSON input') return message
+  return UNPARSEABLE
+}
+
 /**
  * Describe a JSON parse failure without repeating the document.
  *
@@ -47,18 +71,24 @@ function byCodeUnit(left, right) {
  * short enough to be only a credential is therefore reproduced in full by its
  * own error message, so interpolating that message into a diagnostic would
  * defeat every other precaution. The position is the useful half and is safe;
- * the quoted half is the input and never leaves this function. V8 omits the
- * position from the quoting form, so that case reports the offending token
- * alone rather than inventing a location for it.
+ * the quoted half is the input and never leaves this function.
+ *
+ * The quoting shape is recognised FIRST, before the position is looked for: a
+ * manifest whose own text reads `at position 1` is quoted back by V8, so a
+ * search for the position finds that text inside the quoted span and slices
+ * the manifest straight out again. V8 omits the position from the quoting
+ * form, so that case reports the offending token and whether the quoted run
+ * started at the beginning of the document rather than inventing a location.
+ *
+ * The closing guard is what extends all of this to wordings this function has
+ * never seen: every V8 parse message that carries no quoted snippet quotes
+ * JSON punctuation with apostrophes and holds no double quote at all, so a
+ * double quote surviving to the end means a snippet survived with it.
  */
 export function parseFailureDetail(error) {
-  const message = String(error?.message ?? 'could not be parsed')
-  const position = /at position \d+(?: \(line \d+ column \d+\))?/.exec(message)
-  if (position) return message.slice(0, position.index + position[0].length)
-  const token = /^Unexpected token (.+?), ".*?"(?:\.\.\.)? is not valid JSON$/s.exec(message)
-  if (token) return `unexpected token ${token[1]} in the document`
-  if (/^Unexpected end of JSON input$/.test(message)) return message
-  return 'the document could not be parsed as JSON'
+  const message = String(error?.message ?? '')
+  const detail = describeParseFailure(message)
+  return detail.includes('"') ? UNPARSEABLE : detail
 }
 
 async function hashFile(path) {
