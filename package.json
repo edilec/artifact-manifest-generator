@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "lint": "node --check src/index.mjs && node --check bin/artifact-manifest-generator.mjs && node --check test/manifest.test.mjs && node --check test/cli.test.mjs",
+    "lint": "node --check src/index.mjs && node --check bin/artifact-manifest-generator.mjs && node --check test/manifest.test.mjs && node --check test/parse-failure.test.mjs && node --check test/cli.test.mjs",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**",
     "example": "node bin/artifact-manifest-generator.mjs verify examples/dist --manifest examples/manifest.json",
