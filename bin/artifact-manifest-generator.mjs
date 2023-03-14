@@ -3,7 +3,13 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { formatReport, generateManifest, parseFailureDetail, verifyManifest } from '../src/index.mjs'
+import {
+  assertWritableDestination,
+  formatReport,
+  generateManifest,
+  parseFailureDetail,
+  verifyManifest,
+} from '../src/index.mjs'
 
 const HELP = `artifact-manifest-generator
 
@@ -14,7 +20,13 @@ Usage:
   artifact-manifest-generator verify   <DIR> --manifest FILE [--json]
 
 Options:
-  --output FILE       Write the manifest here instead of stdout
+  --output FILE       Write the manifest here instead of stdout. The
+                      destination is refused if it is a symbolic link, if it
+                      resolves outside the output root, or if it is one of the
+                      files being hashed -- including through a hard link,
+                      which shares no path with the file it names.
+  --output-root DIR   Directory the manifest may be written inside
+                      (default: the working directory)
   --build JSON        Build identity recorded verbatim in the manifest
   --provenance JSON   Provenance references recorded verbatim in the manifest
   --manifest FILE     Manifest to verify the directory against
@@ -24,7 +36,8 @@ Options:
 Exit codes:
   0  manifest written, or verification passed
   1  verification failed
-  2  invalid usage, or the directory could not be read
+  2  invalid usage, a refused output destination (stdout stays empty and
+     nothing is written), or the directory could not be read
 `
 
 function parseArguments(argv) {
@@ -35,7 +48,7 @@ function parseArguments(argv) {
     throw new Error(`Unknown command "${command}"; expected generate or verify`)
   }
 
-  const options = { command, directory: null, output: null, manifest: null, json: false, build: undefined, provenance: undefined }
+  const options = { command, directory: null, output: null, outputRoot: null, manifest: null, json: false, build: undefined, provenance: undefined }
 
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index]
@@ -56,6 +69,7 @@ function parseArguments(argv) {
 
     if (argument === '--json') options.json = true
     else if (argument === '--output') options.output = takeValue('--output')
+    else if (argument === '--output-root') options.outputRoot = takeValue('--output-root')
     else if (argument === '--manifest') options.manifest = takeValue('--manifest')
     else if (argument === '--build') options.build = takeJson('--build')
     else if (argument === '--provenance') options.provenance = takeJson('--provenance')
@@ -100,7 +114,21 @@ async function main(argv) {
       })
       const serialized = `${JSON.stringify(manifest, null, 2)}\n`
       if (options.output) {
-        await writeFile(resolve(options.output), serialized)
+        /**
+         * The destination is settled before the first byte is written.
+         *
+         * Every file just hashed is named as an input, because the manifest is
+         * derived from them and writing it over one destroys the evidence the
+         * run was asked to describe -- which this tool did, exiting 0 and
+         * reporting the write. A hard link to one of those files shares no
+         * path with it, so identity is decided by device and inode.
+         */
+        const destination = await assertWritableDestination(options.output, {
+          inputs: manifest.files.map((file) => resolve(options.directory, ...file.path.split('/'))),
+          root: options.outputRoot ?? process.cwd(),
+          label: '--output',
+        })
+        await writeFile(destination, serialized)
         process.stderr.write(`Wrote ${manifest.summary.files} artifact(s) to ${options.output}\n`)
       } else {
         process.stdout.write(serialized)

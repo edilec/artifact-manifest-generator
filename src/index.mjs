@@ -306,4 +306,5 @@ export function formatReport(report) {
   return `${lines.join('\n')}\n`
 }
 
+export { DestinationError, assertWritableDestination } from './destination.mjs'
 export { ScanError }
