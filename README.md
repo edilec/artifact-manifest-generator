@@ -69,6 +69,29 @@ directory, and a link pointing elsewhere would let it appear to vouch for
 content the build never produced — resolving somewhere else entirely on the next
 machine. A link that resolves to nothing is refused too, with its own reason.
 
+## Where the manifest may be written
+
+`--output` is checked before a single byte is written, because this tool once
+destroyed two files it was never asked to touch and exited 0 both times printing
+`Wrote 1 artifact(s)`. Three independent holes, and guarding one or two is what
+most tools that lost data had already done:
+
+| Refused | Why the obvious guard misses it |
+| --- | --- |
+| a **symbolic link at the destination** | `realpath` on the destination *resolves* the link, and resolving is the dangerous act, so the link is refused on sight with `lstat` before anything is opened. A link whose target does not exist yet is the same hole: following it creates a brand new file outside the root. |
+| a **symlinked parent directory** | a lexical prefix check passes for `root/link/out` where `link` leaves the root, so the parent is resolved and then compared. |
+| a **hard link to a file being hashed** | it has no target to resolve and shares no path with the file, so `realpath` and string comparison both call it a different file. Only device plus inode sees that it is one file. |
+
+A destination that resolves outside the output root — the working directory,
+unless `--output-root DIR` names another — is refused as well. A refused
+destination is a configuration error: **nothing is written, stdout stays empty
+and the exit code is 2**.
+
+Destinations that must still work, and are pinned by the same test file: a plain
+path, a subdirectory, a directory under a symbolic link that stays inside the
+root, a rewrite of the manifest from a previous run, and an absolute path
+outside the working directory once `--output-root` names the root it belongs to.
+
 ## Library usage
 
 ```js
@@ -97,7 +120,7 @@ packaging question rather than tampering. It is still reported.
 | ---: | --- |
 | `0` | manifest written, or verification passed |
 | `1` | verification failed |
-| `2` | invalid usage, or the directory could not be read |
+| `2` | invalid usage, a refused output destination, or the directory could not be read |
 
 ## Diagnostics never quote the input
 
