@@ -119,20 +119,51 @@ export async function assertWritableDestination(destination, options = {}) {
   const resolved = join(parent, ...tail, basename(target))
   if (existing === null) return resolved
 
-  // Same file as an input? Compare identity, not paths.
   for (const input of inputs) {
-    let source
-    try {
-      source = await stat(input, { bigint: true })
-    } catch {
-      continue
-    }
-    if (source.dev === existing.dev && source.ino === existing.ino && existing.ino !== 0n) {
+    const source = await stat(input, { bigint: true }).catch(() => null)
+    const sourcePath = await realpath(input).catch(() => null)
+    if (source === null && sourcePath === null) continue
+
+    const reason = sameFileReason(existing, resolved, source, sourcePath)
+    if (reason === 'inode') {
       throw new DestinationError(
         `${label} is the same file as an input (they share device ${existing.dev} and inode ${existing.ino}, `
         + 'so a hard link does not make them different files). This tool never rewrites what it reads.',
       )
     }
+    if (reason === 'path') {
+      throw new DestinationError(
+        `${label} is the same file as an input by resolved path. This tool never rewrites what it reads.`,
+      )
+    }
   }
   return resolved
+}
+
+/**
+ * Whether a destination and an input are one file, and how that was decided.
+ *
+ * Identity, not paths: a hard link has no target to resolve and shares no path
+ * with the file it names, so `realpath` and string comparison both call it a
+ * different file. Device plus inode is the filesystem's own answer, read with
+ * `bigint: true` because an inode number can exceed what a double holds
+ * exactly.
+ *
+ * The resolved-path comparison behind it is a backstop for a filesystem that
+ * reports no inode number at all -- `ino` of zero, which some Windows and
+ * network filesystems do -- where the identity test cannot answer. It is a
+ * backstop and never the check: a hard link is exactly what it misses. It
+ * cannot be isolated by a test that goes through a filesystem reporting real
+ * inode numbers, which is why this decision is a pure function with its own
+ * test rather than a condition buried in the walk above.
+ */
+export function sameFileReason(destination, destinationPath, source, sourcePath) {
+  if (
+    source !== null
+    && destination.ino !== 0n
+    && source.dev === destination.dev
+    && source.ino === destination.ino
+  ) return 'inode'
+  if (sourcePath !== null && sourcePath === destinationPath) return 'path'
+  return null
 }

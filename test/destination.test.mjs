@@ -7,6 +7,8 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+import { sameFileReason } from '../src/destination.mjs'
+
 /**
  * Where the manifest is allowed to land.
  *
@@ -190,4 +192,22 @@ test('ALLOWED: an absolute destination outside the working directory when its ro
     assert.equal(named.code, 0)
     assert.equal(JSON.parse(await readFile(target, 'utf8')).summary.files, 1)
   })
+})
+
+test('identity is decided by inode, with the resolved path only as a backstop', () => {
+  const inode = (dev, ino) => ({ dev: BigInt(dev), ino: BigInt(ino) })
+
+  // A hard link: one inode, two paths. Only the inode comparison sees it.
+  assert.equal(sameFileReason(inode(1, 7), '/a/out.json', inode(1, 7), '/a/input.json'), 'inode')
+  // Two different files that happen to sit side by side.
+  assert.equal(sameFileReason(inode(1, 7), '/a/out.json', inode(1, 8), '/a/input.json'), null)
+  // Same inode number on a different device is a different file.
+  assert.equal(sameFileReason(inode(1, 7), '/a/out.json', inode(2, 7), '/a/input.json'), null)
+
+  // A filesystem that reports no inode number at all cannot be asked about
+  // identity, and this is the only case the resolved-path backstop decides.
+  assert.equal(sameFileReason(inode(1, 0), '/a/input.json', inode(1, 0), '/a/input.json'), 'path')
+  assert.equal(sameFileReason(inode(1, 0), '/a/out.json', inode(1, 0), '/a/input.json'), null)
+  // An input that could not be stat'ed at all still cannot be written over.
+  assert.equal(sameFileReason(inode(1, 7), '/a/input.json', null, '/a/input.json'), 'path')
 })
