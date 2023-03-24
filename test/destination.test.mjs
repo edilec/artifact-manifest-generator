@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { link, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -26,7 +27,7 @@ import { sameFileReason } from '../src/destination.mjs'
  *   hard link to an input        no target to resolve, no shared path; only
  *                                device plus inode sees that it is one file
  *
- * The four allowed rows at the end are not decoration. A guard that refuses
+ * The ALLOWED rows at the end are not decoration. A guard that refuses
  * everything passes every data-loss test above while making the tool useless,
  * so the destinations that must still work are pinned with the same weight.
  */
@@ -171,13 +172,35 @@ test('ALLOWED: a plain sibling path, an existing subdirectory, and a rewrite of 
   })
 })
 
-test('ALLOWED: a symlinked directory that stays inside the root, and a directory still to be created', async () => {
+test('ALLOWED: a symlinked directory that stays inside the root', async () => {
   await withWorkspace(async ({ root }) => {
     await mkdir(join(root, 'real-build'))
     await symlink(join(root, 'real-build'), join(root, 'linked-build'))
 
     assert.equal((await generate(root, ['--output', join('linked-build', 'manifest.json')])).code, 0)
     assert.deepEqual(await readdir(join(root, 'real-build')), ['manifest.json'])
+  })
+})
+
+/**
+ * A directory this run would have to create is refused, not created.
+ *
+ * The guard permits it -- the nearest existing ancestor is resolved and the
+ * missing segments appended, because a segment that does not exist cannot be a
+ * link -- and this tool then declines to create it, so the run stops with the
+ * open failure and writes nothing. That is a deliberate boundary rather than an
+ * oversight: this tool describes a directory it was given and does not build
+ * the tree its output goes into. It is pinned here because the alternative is a
+ * claim nobody checks; the one thing that must never happen is a partial write.
+ */
+test('a destination directory that does not exist yet is refused, and nothing is written', async () => {
+  await withWorkspace(async ({ root }) => {
+    const result = await generate(root, ['--output', join('build', 'deep', 'manifest.json')])
+
+    assert.equal(result.code, 2)
+    assert.equal(result.stdout, '')
+    assert.match(result.stderr, /ENOENT/)
+    assert.equal(existsSync(join(root, 'build')), false)
   })
 })
 
