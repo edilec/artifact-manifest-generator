@@ -1,0 +1,1 @@
+Edilec example artifact

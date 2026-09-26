@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1",
+  "tool": "artifact-manifest-generator",
+  "summary": {
+    "files": 3,
+    "totalBytes": 152,
+    "symbolicLinks": 0
+  },
+  "files": [
+    {
+      "path": "README.txt",
+      "size": 24,
+      "digest": "sha256:c5c99bba77a4a80a4eb3bac283275596ab78ce67ebde126c4366ac1c8b30dbae"
+    },
+    {
+      "path": "assets/mark.svg",
+      "size": 97,
+      "digest": "sha256:1226b22e369865eaf8b319d5aba863a7c531f313552cf47b4f0dbcec6d199142"
+    },
+    {
+      "path": "index.mjs",
+      "size": 31,
+      "digest": "sha256:b3c992f54d7c2ff93d13b75ca91d6971d8b2bdb2005d476a041c14b2e478ece7"
+    }
+  ],
+  "build": {
+    "id": "example-build-1",
+    "revision": "0000000000000000000000000000000000000000"
+  },
+  "provenance": {
+    "workflow": "local-example",
+    "note": "synthetic artifact, no production content"
+  },
+  "digest": "sha256:3d461f6f33bcce99e2bd864d1a96ecda6f04d4dc87179056f3b1cf143402475c"
+}
