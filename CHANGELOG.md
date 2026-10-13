@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## 0.1.0 — 2026-10-14
 
 ### Added
 
@@ -37,4 +37,4 @@ All notable changes to this project are documented in this file.
   was reproduced in full by its own diagnostic. Position, line and column are
   kept; the quoted content is dropped.
 
-No release has been published.
+GitHub source release v0.1.0 — 2026-10-14.
